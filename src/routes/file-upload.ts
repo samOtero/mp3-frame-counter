@@ -6,7 +6,7 @@ import {
   processUploadedFile,
   readUploadedFile,
   UploadError,
-} from '../uploads/read-uploaded-file.js';
+} from '../uploads/process-upload.js';
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 

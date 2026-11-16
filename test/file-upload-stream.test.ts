@@ -5,7 +5,7 @@ import test from 'node:test';
 import type { TestContext } from 'node:test';
 import { buildApp } from '../src/app.js';
 import { MAX_UPLOAD_BYTES } from '../src/routes/file-upload.js';
-import { processUploadedFile } from '../src/uploads/read-uploaded-file.js';
+import { processUploadedFile } from '../src/uploads/process-upload.js';
 import {
   makeApeTag,
   makeFrame,

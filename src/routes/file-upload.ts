@@ -1,8 +1,12 @@
-import multipart from "@fastify/multipart";
-import type { FastifyPluginAsync } from "fastify";
-import { countMp3Frames, Mp3ParseError } from "../mp3/count-frames.js";
-import { countMp3FramesStream } from "../mp3/count-frames-stream.js";
-import { processUploadedFile, readUploadedFile, UploadError } from "../uploads/read-uploaded-file.js";
+import multipart from '@fastify/multipart';
+import type { FastifyPluginAsync } from 'fastify';
+import { countMp3Frames, Mp3ParseError } from '../mp3/count-frames.js';
+import { countMp3FramesStream } from '../mp3/count-frames-stream.js';
+import {
+  processUploadedFile,
+  readUploadedFile,
+  UploadError,
+} from '../uploads/read-uploaded-file.js';
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
@@ -11,7 +15,7 @@ export const fileUploadRoutes: FastifyPluginAsync = async (app) => {
     limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 0, parts: 1 },
   });
 
-  app.post("/file-upload", async (request, reply) => {
+  app.post('/file-upload', async (request, reply) => {
     try {
       const file = await readUploadedFile(request);
       return { frameCount: countMp3Frames(file) };
@@ -27,9 +31,12 @@ export const fileUploadRoutes: FastifyPluginAsync = async (app) => {
       throw error;
     }
   });
-  app.post("/file-upload-stream", async (request, reply) => {
+  app.post('/file-upload-stream', async (request, reply) => {
     try {
-      const frameCount = await processUploadedFile(request, countMp3FramesStream);
+      const frameCount = await processUploadedFile(
+        request,
+        countMp3FramesStream,
+      );
       return { frameCount };
     } catch (error) {
       if (error instanceof UploadError) {

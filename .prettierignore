@@ -1,0 +1,5 @@
+dist/
+coverage/
+.husky/
+package-lock.json
+*.mp3

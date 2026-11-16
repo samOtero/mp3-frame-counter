@@ -1,6 +1,12 @@
 import { isInformationFrame, readFrameHeader } from './frame-header.js';
 import { Mp3ParseError } from './parse-error.js';
-import { checkApeHeader, checkId3v2Footer, readApeFooter, readId3v2Header, readSynchsafeSize } from './tag-headers.js';
+import {
+  checkApeHeader,
+  checkId3v2Footer,
+  readApeFooter,
+  readId3v2Header,
+  readSynchsafeSize,
+} from './tag-headers.js';
 export { Mp3ParseError } from './parse-error.js';
 
 export function countMp3Frames(file: Buffer): number {
@@ -71,42 +77,65 @@ function skipTrailingTags(file: Buffer, audioStart: number): number {
 
   // Peel recognized tags off the end repeatedly, allowing tag combinations.
   while (end > audioStart) {
-    if (end - audioStart >= 128 && file.toString('latin1', end - 128, end - 125) === 'TAG') {
+    if (
+      end - audioStart >= 128 &&
+      file.toString('latin1', end - 128, end - 125) === 'TAG'
+    ) {
       end -= 128;
       // The 227-byte TAG+ extension belongs immediately before ID3v1.
-      if (end - audioStart >= 227 && file.toString('latin1', end - 227, end - 223) === 'TAG+') {
+      if (
+        end - audioStart >= 227 &&
+        file.toString('latin1', end - 227, end - 223) === 'TAG+'
+      ) {
         end -= 227;
       }
       continue;
     }
 
-    if (end - audioStart >= 9 && file.toString('latin1', end - 9, end) === 'LYRICS200') {
+    if (
+      end - audioStart >= 9 &&
+      file.toString('latin1', end - 9, end) === 'LYRICS200'
+    ) {
       end = readLyrics3v2TagStart(file, end, audioStart);
       continue;
     }
 
-    if (end - audioStart >= 9 && file.toString('latin1', end - 9, end) === 'LYRICSEND') {
+    if (
+      end - audioStart >= 9 &&
+      file.toString('latin1', end - 9, end) === 'LYRICSEND'
+    ) {
       end = readLyrics3v1TagStart(file, end, audioStart);
       continue;
     }
 
-    if (end - audioStart >= 10 && file.toString('latin1', end - 10, end - 7) === '3DI') {
+    if (
+      end - audioStart >= 10 &&
+      file.toString('latin1', end - 10, end - 7) === '3DI'
+    ) {
       const footer = end - 10;
       const tagSize = readSynchsafeSize(file, footer + 6);
       // ID3v2.4 sizes exclude both the 10-byte header and 10-byte footer.
       const start = end - tagSize - 20;
-      if (start < audioStart || file.readUInt8(footer + 3) !== 4
-        || (file.readUInt8(footer + 5) & 0x10) === 0) {
+      if (
+        start < audioStart ||
+        file.readUInt8(footer + 3) !== 4 ||
+        (file.readUInt8(footer + 5) & 0x10) === 0
+      ) {
         throw new Mp3ParseError('Invalid appended ID3v2.4 tag.');
       }
       if (readId3v2TagEnd(file, start, end) !== end) {
-        throw new Mp3ParseError('Appended ID3v2.4 header and footer do not match.');
+        throw new Mp3ParseError(
+          'Appended ID3v2.4 header and footer do not match.',
+        );
       }
       end = start;
       continue;
     }
 
-    if (end - audioStart >= 32 && file.toString('latin1', end - 32, end - 24) === 'APETAGEX') {
+    if (
+      end - audioStart >= 32 &&
+      file.toString('latin1', end - 32, end - 24) === 'APETAGEX'
+    ) {
       end = readApeTagStart(file, end, audioStart);
       continue;
     }
@@ -117,7 +146,11 @@ function skipTrailingTags(file: Buffer, audioStart: number): number {
   return end;
 }
 
-function readLyrics3v2TagStart(file: Buffer, end: number, audioStart: number): number {
+function readLyrics3v2TagStart(
+  file: Buffer,
+  end: number,
+  audioStart: number,
+): number {
   // The six decimal size digits precede LYRICS200 and exclude this 15-byte tail.
   if (end - audioStart < 15) {
     throw new Mp3ParseError('Incomplete Lyrics3v2 tag.');
@@ -130,15 +163,22 @@ function readLyrics3v2TagStart(file: Buffer, end: number, audioStart: number): n
 
   const tagSize = Number(sizeText);
   const start = sizeOffset - tagSize;
-  if (tagSize < 11 || start < audioStart
-    || file.toString('latin1', start, start + 11) !== 'LYRICSBEGIN') {
+  if (
+    tagSize < 11 ||
+    start < audioStart ||
+    file.toString('latin1', start, start + 11) !== 'LYRICSBEGIN'
+  ) {
     throw new Mp3ParseError('Invalid or incomplete Lyrics3v2 tag.');
   }
 
   return start;
 }
 
-function readLyrics3v1TagStart(file: Buffer, end: number, audioStart: number): number {
+function readLyrics3v1TagStart(
+  file: Buffer,
+  end: number,
+  audioStart: number,
+): number {
   // There is no size field: search only enough bytes for the opening marker and
   // up to 5100 lyric bytes, never the whole audio file.
   const textEnd = end - 9;
@@ -159,7 +199,11 @@ function readLyrics3v1TagStart(file: Buffer, end: number, audioStart: number): n
   return start;
 }
 
-function readApeTagStart(file: Buffer, end: number, audioStart: number): number {
+function readApeTagStart(
+  file: Buffer,
+  end: number,
+  audioStart: number,
+): number {
   const footer = end - 32;
   const footerBytes = file.subarray(footer, end);
   const { size: tagSize, hasHeader } = readApeFooter(footerBytes);

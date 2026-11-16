@@ -1,6 +1,8 @@
 import { Mp3ParseError } from './parse-error.js';
 
-const BITRATES_KBPS = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
+const BITRATES_KBPS = [
+  0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320,
+];
 const SAMPLE_RATES_HZ = [44100, 48000, 32000];
 
 export interface FrameHeader {
@@ -8,7 +10,12 @@ export interface FrameHeader {
   mono: boolean;
 }
 
-export function readFrameHeader(file: Buffer, offset: number, audioEnd: number, byteOffset = offset): FrameHeader {
+export function readFrameHeader(
+  file: Buffer,
+  offset: number,
+  audioEnd: number,
+  byteOffset = offset,
+): FrameHeader {
   if (offset + 4 > audioEnd) {
     throw new Mp3ParseError(`Incomplete MPEG header at byte ${byteOffset}.`);
   }
@@ -32,8 +39,14 @@ export function readFrameHeader(file: Buffer, offset: number, audioEnd: number, 
   if (bitrateIndex === 0) {
     throw new Mp3ParseError('Free-format MP3 bitrate is not supported.');
   }
-  if (bitrateKbps === undefined || sampleRate === undefined || (header & 0b11) === 0b10) {
-    throw new Mp3ParseError(`Invalid MPEG frame header values at byte ${byteOffset}.`);
+  if (
+    bitrateKbps === undefined ||
+    sampleRate === undefined ||
+    (header & 0b11) === 0b10
+  ) {
+    throw new Mp3ParseError(
+      `Invalid MPEG frame header values at byte ${byteOffset}.`,
+    );
   }
 
   const padding = (header >>> 9) & 1;
@@ -44,7 +57,11 @@ export function readFrameHeader(file: Buffer, offset: number, audioEnd: number, 
   };
 }
 
-export function isInformationFrame(file: Buffer, offset: number, frame: FrameHeader): boolean {
+export function isInformationFrame(
+  file: Buffer,
+  offset: number,
+  frame: FrameHeader,
+): boolean {
   // Xing/Info uses the conventional offset of 21 bytes (mono) or 36 (stereo).
   const tagOffset = offset + (frame.mono ? 21 : 36);
   const frameEnd = offset + frame.length;
@@ -62,8 +79,12 @@ export function isInformationFrame(file: Buffer, offset: number, frame: FrameHea
   }
 
   const flags = file.readUInt32BE(tagOffset + 4);
-  const requiredBytes = 8 + ((flags & 1) ? 4 : 0) + ((flags & 2) ? 4 : 0)
-    + ((flags & 4) ? 100 : 0) + ((flags & 8) ? 4 : 0);
+  const requiredBytes =
+    8 +
+    (flags & 1 ? 4 : 0) +
+    (flags & 2 ? 4 : 0) +
+    (flags & 4 ? 100 : 0) +
+    (flags & 8 ? 4 : 0);
   if ((flags & ~0x0f) !== 0 || tagOffset + requiredBytes > frameEnd) {
     throw new Mp3ParseError('Invalid Xing/Info information tag.');
   }

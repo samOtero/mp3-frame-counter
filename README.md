@@ -5,7 +5,7 @@ Designed for MPEG Version 1 Audio Layer 3 files. Built with Fastify and TypeScri
 
 ## Requirements
 
-- Node.js 22 or newer
+- Node.js 22.13+ (22.x) or 24+
 - npm
 
 ## Install and run
@@ -67,13 +67,13 @@ matching the sample's MediaInfo result. The count stored in that tag is not used
 
 Error responses use JSON with a message describing the problem.
 
-| HTTP code | Status | Meaning |
-| --- | --- | --- |
-| `400` | Bad Request | The file is missing, invalid, or incomplete; the upload is malformed; or additional files/form fields were provided. |
-| `404` | Not Found | The requested route does not exist. |
-| `413` | Content Too Large | The uploaded file exceeds the 10 MiB limit. |
-| `415` | Unsupported Media Type | The request does not use `multipart/form-data`. |
-| `500` | Internal Server Error | An unexpected server failure occurred. |
+| HTTP code | Status                 | Meaning                                                                                                              |
+| --------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `400`     | Bad Request            | The file is missing, invalid, or incomplete; the upload is malformed; or additional files/form fields were provided. |
+| `404`     | Not Found              | The requested route does not exist.                                                                                  |
+| `413`     | Content Too Large      | The uploaded file exceeds the 10 MiB limit.                                                                          |
+| `415`     | Unsupported Media Type | The request does not use `multipart/form-data`.                                                                      |
+| `500`     | Internal Server Error  | An unexpected server failure occurred.                                                                               |
 
 Uploads to `/file-upload` are buffered in memory before parsing, so memory usage grows
 with the file size and number of concurrent uploads. Unexpected bytes between
@@ -157,6 +157,26 @@ Expected: HTTP `200 OK`, a JSON content type, and this body:
 ```json
 { "status": "ok" }
 ```
+
+## Formatting, linting and commit hooks
+
+`npm install` enables the pre-commit hook through Husky. Before each commit,
+lint-staged runs ESLint with automatic fixes on staged TypeScript and JavaScript
+files, then formats them with Prettier. Staged JSON and Markdown files are also
+formatted. Successful fixes are included in the commit; remaining lint errors
+block it. Partially staged files keep their unstaged changes separate.
+
+ESLint uses the recommended JavaScript and TypeScript rules. Prettier applies a
+consistent style with single quotes and LF line endings. Generated output,
+dependencies and the sample MP3 are excluded from formatting.
+
+| Command                | Purpose                                                             |
+| ---------------------- | ------------------------------------------------------------------- |
+| `npm run lint`         | Check the project with ESLint.                                      |
+| `npm run lint:fix`     | Apply available ESLint fixes.                                       |
+| `npm run format`       | Format supported project files with Prettier.                       |
+| `npm run format:check` | Check formatting without changing files.                            |
+| `npm run check`        | Run linting, formatting checks, type-checking, tests and the build. |
 
 ## Test, type-check and build
 

@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { countMp3Frames, Mp3ParseError } from '../src/mp3/count-frames.js';
-import { makeApeTag, makeFrame, makeId3Tag, makeId3v1Tag, makeInformationFrame } from './fixtures.js';
+import {
+  makeFrame,
+  makeId3Tag,
+  makeId3v1Tag,
+  makeInformationFrame,
+} from './fixtures.js';
 
 test('counts the supplied sample as 6089 audio frames, matching MediaInfo', async () => {
   const sample = await readFile(new URL('../sample.mp3', import.meta.url));
@@ -22,7 +27,10 @@ test('uses each frame bitrate and padding instead of assuming a fixed length', (
   assert.equal(countMp3Frames(file), 3);
 });
 
-for (const [sampleRateIndex, byteLength] of [[1, 384], [2, 576]] as const) {
+for (const [sampleRateIndex, byteLength] of [
+  [1, 384],
+  [2, 576],
+] as const) {
   test(`supports sample-rate index ${sampleRateIndex}`, () => {
     assert.equal(countMp3Frames(makeFrame({ sampleRateIndex, byteLength })), 1);
   });
@@ -36,12 +44,20 @@ test('does not count sync-looking bytes embedded in an audio payload', () => {
 
 for (const version of [2, 3, 4]) {
   test(`skips ID3v2.${version} metadata, including embedded MPEG-looking bytes`, () => {
-    assert.equal(countMp3Frames(Buffer.concat([makeId3Tag(makeFrame(), version), makeFrame()])), 1);
+    assert.equal(
+      countMp3Frames(
+        Buffer.concat([makeId3Tag(makeFrame(), version), makeFrame()]),
+      ),
+      1,
+    );
   });
 }
 
 test('skips multiple leading ID3 tags and an ID3v2.4 footer', () => {
-  const tags = [makeId3Tag(Buffer.alloc(130)), makeId3Tag(Buffer.alloc(8), 4, true)];
+  const tags = [
+    makeId3Tag(Buffer.alloc(130)),
+    makeId3Tag(Buffer.alloc(8), 4, true),
+  ];
   assert.equal(countMp3Frames(Buffer.concat([...tags, makeFrame()])), 1);
 });
 
@@ -52,14 +68,23 @@ test('skips an ID3v1 trailer', () => {
 for (const marker of ['Xing', 'Info']) {
   for (const mono of [false, true]) {
     test(`excludes initial ${marker} information frame (${mono ? 'mono' : 'stereo'}) without trusting its count`, () => {
-      const file = Buffer.concat([makeInformationFrame(marker, mono), makeFrame({ mono }), makeFrame({ mono })]);
+      const file = Buffer.concat([
+        makeInformationFrame(marker, mono),
+        makeFrame({ mono }),
+        makeFrame({ mono }),
+      ]);
       assert.equal(countMp3Frames(file), 2);
     });
   }
 }
 
 test('counts CRC-protected frames without adding CRC bytes to the frame length', () => {
-  assert.equal(countMp3Frames(Buffer.concat([makeFrame({ crcProtected: true }), makeFrame()])), 2);
+  assert.equal(
+    countMp3Frames(
+      Buffer.concat([makeFrame({ crcProtected: true }), makeFrame()]),
+    ),
+    2,
+  );
 });
 
 test('recognizes the conventional Xing position in a CRC-protected information frame', () => {
@@ -71,7 +96,10 @@ test('recognizes the conventional Xing position in a CRC-protected information f
 test('only excludes information tags at the expected position in the first frame', () => {
   const frame = makeFrame();
   frame.write('Xing', 50);
-  assert.equal(countMp3Frames(Buffer.concat([frame, makeInformationFrame()])), 2);
+  assert.equal(
+    countMp3Frames(Buffer.concat([frame, makeInformationFrame()])),
+    2,
+  );
 });
 
 test('rejects an information frame without any audio frames', () => {
@@ -85,32 +113,55 @@ test('rejects empty or unrelated input', () => {
 
 test('rejects a truncated frame instead of returning a partial count', () => {
   const file = Buffer.concat([makeFrame(), makeFrame().subarray(0, 100)]);
-  assert.throws(() => countMp3Frames(file), /Incomplete MPEG frame at byte 417/);
+  assert.throws(
+    () => countMp3Frames(file),
+    /Incomplete MPEG frame at byte 417/,
+  );
 });
 
 test('rejects a partial header or unexpected trailing bytes', () => {
-  assert.throws(() => countMp3Frames(Buffer.concat([makeFrame(), Buffer.from([0xff, 0xfb])])), /Incomplete MPEG header/);
-  assert.throws(() => countMp3Frames(Buffer.concat([makeFrame(), Buffer.from('junk')])), /Invalid MPEG frame header/);
+  assert.throws(
+    () =>
+      countMp3Frames(Buffer.concat([makeFrame(), Buffer.from([0xff, 0xfb])])),
+    /Incomplete MPEG header/,
+  );
+  assert.throws(
+    () => countMp3Frames(Buffer.concat([makeFrame(), Buffer.from('junk')])),
+    /Invalid MPEG frame header/,
+  );
 });
 
 for (const headerByte of [0xf3, 0xfd]) {
   test(`rejects unsupported MPEG version/layer (header byte ${headerByte})`, () => {
     const frame = makeFrame();
     frame[1] = headerByte;
-    assert.throws(() => countMp3Frames(frame), /Only MPEG Version 1 Audio Layer 3/);
+    assert.throws(
+      () => countMp3Frames(frame),
+      /Only MPEG Version 1 Audio Layer 3/,
+    );
   });
 }
 
 test('rejects reserved bitrate, sample rate and emphasis values', () => {
-  for (const [index, value] of [[2, 0xf0], [2, 0x9c], [3, 0x02]] as const) {
+  for (const [index, value] of [
+    [2, 0xf0],
+    [2, 0x9c],
+    [3, 0x02],
+  ] as const) {
     const frame = makeFrame();
     frame[index] = value;
-    assert.throws(() => countMp3Frames(frame), /Invalid MPEG frame header values/);
+    assert.throws(
+      () => countMp3Frames(frame),
+      /Invalid MPEG frame header values/,
+    );
   }
 });
 
 test('rejects unsupported free-format bitrate explicitly', () => {
-  assert.throws(() => countMp3Frames(makeFrame({ bitrateIndex: 0 })), /Free-format/);
+  assert.throws(
+    () => countMp3Frames(makeFrame({ bitrateIndex: 0 })),
+    /Free-format/,
+  );
 });
 
 test('rejects truncated and malformed ID3 tags', () => {
@@ -122,7 +173,14 @@ test('rejects truncated and malformed ID3 tags', () => {
   invalidFlags[5] = 1;
   const invalidFooter = makeId3Tag(Buffer.alloc(0), 4, true);
   invalidFooter[10] = 0;
-  for (const file of [Buffer.from('ID3'), makeId3Tag(Buffer.alloc(20)).subarray(0, 15), invalidSize, invalidVersion, invalidFlags, invalidFooter]) {
+  for (const file of [
+    Buffer.from('ID3'),
+    makeId3Tag(Buffer.alloc(20)).subarray(0, 15),
+    invalidSize,
+    invalidVersion,
+    invalidFlags,
+    invalidFooter,
+  ]) {
     assert.throws(() => countMp3Frames(file), Mp3ParseError);
   }
 });
@@ -140,7 +198,10 @@ test('rejects malformed Xing flags or fields extending beyond their frame', () =
 test('compares metadata markers byte-for-byte without stripping high bits', () => {
   const id3 = makeId3Tag(Buffer.alloc(0));
   id3[0] = 0xc9; // Must not be decoded as ASCII "I".
-  assert.throws(() => countMp3Frames(Buffer.concat([id3, makeFrame()])), Mp3ParseError);
+  assert.throws(
+    () => countMp3Frames(Buffer.concat([id3, makeFrame()])),
+    Mp3ParseError,
+  );
   const info = makeInformationFrame();
   info[36] = 0xd8; // Must not be decoded as ASCII "X".
   assert.equal(countMp3Frames(Buffer.concat([info, makeFrame()])), 2);

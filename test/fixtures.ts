@@ -63,7 +63,10 @@ export function makeId3v1ExtendedTag(): Buffer {
   return tag;
 }
 
-export function makeLyrics3Tag(lyrics = 'test lyrics', version: 1 | 2 = 2): Buffer {
+export function makeLyrics3Tag(
+  lyrics = 'test lyrics',
+  version: 1 | 2 = 2,
+): Buffer {
   const text = Buffer.from(lyrics, 'latin1');
   const begin = Buffer.from('LYRICSBEGIN');
   if (version === 1) {
@@ -74,10 +77,16 @@ export function makeLyrics3Tag(lyrics = 'test lyrics', version: 1 | 2 = 2): Buff
   // LYRICSBEGIN and the field, but excludes the size digits and LYRICS200.
   const field = Buffer.from(`LYR${text.length.toString().padStart(5, '0')}`);
   const body = Buffer.concat([begin, field, text]);
-  return Buffer.concat([body, Buffer.from(`${body.length.toString().padStart(6, '0')}LYRICS200`)]);
+  return Buffer.concat([
+    body,
+    Buffer.from(`${body.length.toString().padStart(6, '0')}LYRICS200`),
+  ]);
 }
 
-export function makeApeTag(value: Buffer = Buffer.from('test title'), hasHeader = false): Buffer {
+export function makeApeTag(
+  value: Buffer = Buffer.from('test title'),
+  hasHeader = false,
+): Buffer {
   // One text item: value length, item flags, null-terminated key, and value.
   const itemHeader = Buffer.alloc(8);
   itemHeader.writeUInt32LE(value.length, 0);
@@ -107,8 +116,13 @@ export function makeMultipart(parts: MultipartPart[]) {
   const boundary = 'mp3-test-boundary';
   const chunks: Buffer[] = [];
   for (const part of parts) {
-    const filename = part.filename === undefined ? '' : `; filename="${part.filename}"`;
-    chunks.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${part.fieldname}"${filename}\r\n\r\n`));
+    const filename =
+      part.filename === undefined ? '' : `; filename="${part.filename}"`;
+    chunks.push(
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="${part.fieldname}"${filename}\r\n\r\n`,
+      ),
+    );
     chunks.push(part.body, Buffer.from('\r\n'));
   }
   chunks.push(Buffer.from(`--${boundary}--\r\n`));

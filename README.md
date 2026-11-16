@@ -75,10 +75,68 @@ Error responses use JSON with a message describing the problem.
 | `415` | Unsupported Media Type | The request does not use `multipart/form-data`. |
 | `500` | Internal Server Error | An unexpected server failure occurred. |
 
-Uploads are currently buffered in memory before parsing, so memory usage grows
-with the file size and number of concurrent uploads. Free-format bitrate is not
-supported. Unexpected bytes between frames or after the recognized metadata are
-rejected; the parser does not attempt to repair corrupt files or decode audio.
+Uploads to `/file-upload` are buffered in memory before parsing, so memory usage grows
+with the file size and number of concurrent uploads. Unexpected bytes between
+frames or after the recognized metadata are rejected; the parser does not
+attempt to repair corrupt files or decode audio.
+
+Free-format MP3 files (bitrate index `0`) are not supported and return HTTP
+`400 Bad Request` with the message `Free-format MP3 bitrate is not supported.`
+These can still be MPEG-1 Layer III files, but their headers do not specify a
+bitrate from the standard lookup table, so the current parser cannot calculate
+their frame lengths from the header alone.
+
+A future version could support free-format files by searching for subsequent
+compatible frame headers, inferring the frame length from their spacing, and
+validating that spacing across further frames while accounting for padding.
+This would need additional checks and tests to avoid mistaking matching bytes
+inside audio data for real frame boundaries.
+
+## Streaming upload endpoint
+
+`POST /file-upload-stream` parses the upload as chunks arrive, without saving a
+temporary file or collecting the complete upload in memory. It uses the same
+multipart field, 10 MiB upload limit, JSON response and HTTP error statuses as
+`/file-upload`. The included sample returns `{ "frameCount": 6089 }` on both.
+
+macOS / Linux:
+
+```bash
+curl -i http://127.0.0.1:3000/file-upload-stream -F "file=@sample.mp3"
+```
+
+Windows PowerShell:
+
+```powershell
+curl.exe -i http://127.0.0.1:3000/file-upload-stream -F "file=@sample.mp3"
+```
+
+The parser uses [strtok3](https://github.com/Borewit/strtok3) for generic binary
+stream reading, peeking and skipping across chunk boundaries. MPEG header
+interpretation, metadata validation and frame counting are implemented in this
+project. It processes one audio frame at a time and skips ID3v2 and headered
+APEv2 bodies using their declared sizes. Its working memory is bounded rather
+than proportional to the file size. It retains the
+current incoming chunk, small header/frame buffers, and bounded lookahead for
+ambiguous metadata prefixes. Lyrics3 lookahead can retain up to 1,000,014 bytes
+(the maximum six-digit Lyrics3v2 body size plus its 15-byte ending), with
+additional stream and bookkeeping overhead. ID3v1 extension lookahead is at
+most 351 bytes. Neither requires buffering the rest of the upload. The
+tokenizer's buffer/lookahead limit is configured explicitly.
+
+Both endpoints support the metadata formats listed above, with these streaming
+differences:
+
+- APEv2 requires both a header and a matching footer. Footer-only APEv2 is not
+  supported; unsupported trailing data returns `400 Bad Request`. Use
+  `/file-upload` for files with footer-only APEv2 tags.
+- Lyrics3v2 field lengths are checked while reading forward, in addition to
+  checking the final tag size. The buffered parser checks the outer boundaries.
+
+The streaming endpoint also excludes an initial Xing/Info frame and rejects
+free-format bitrate. It waits for the complete upload and multipart validation
+before returning a count. Invalid MP3 uploads are consumed through the upload
+limit so transport failures and oversize files are still reported appropriately.
 
 ## Check the health endpoint
 
@@ -115,6 +173,9 @@ since both use port 3000. The build outputs JavaScript to `dist/`.
 Tests cover the supplied sample and structural fixtures with known frame counts,
 variable bitrate, padding, leading/trailing metadata and tag combinations,
 invalid/truncated input, and upload errors.
+Streaming tests additionally cover arbitrary chunk boundaries, agreement with
+the buffered parser, file streams, generated large metadata bodies, and the
+streaming endpoint's narrower APEv2 support.
 The structural fixtures test frame boundaries; their dummy payloads are not
 intended to be playable audio.
 

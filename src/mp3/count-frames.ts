@@ -1,4 +1,5 @@
 import { isInformationFrame, readFrameHeader } from './frame-header.js';
+import type { FrameHeader } from './frame-header.js';
 import { Mp3ParseError } from './parse-error.js';
 import {
   checkApeHeader,
@@ -15,16 +16,28 @@ export function countMp3Frames(file: Buffer): number {
   }
 
   let offset = skipId3v2Tags(file);
-  const audioEnd = skipTrailingTags(file, offset);
+  let trailing = findTrailingTags(file, offset);
 
   let frameCount = 0;
   let firstFrame = true;
 
-  while (offset < audioEnd) {
-    const frame = readFrameHeader(file, offset, audioEnd);
+  while (offset < trailing.start) {
+    let frame: FrameHeader;
+    try {
+      frame = readFrameHeader(file, offset, file.length);
+    } catch (error) {
+      if (error instanceof Mp3ParseError) throw trailing.error ?? error;
+      throw error;
+    }
 
-    if (offset + frame.length > audioEnd) {
+    if (offset + frame.length > file.length) {
       throw new Mp3ParseError(`Incomplete MPEG frame at byte ${offset}.`);
+    }
+
+    // A footer signature can occur inside compressed audio. A complete frame
+    // takes precedence: inspect trailers again beyond this frame's boundary.
+    if (offset + frame.length >= trailing.start) {
+      trailing = findTrailingTags(file, offset + frame.length);
     }
 
     // Match MediaInfo's audio-frame convention without trusting the tag's count.
@@ -36,6 +49,7 @@ export function countMp3Frames(file: Buffer): number {
     firstFrame = false;
   }
 
+  if (trailing.error) throw trailing.error;
   if (frameCount === 0) {
     throw new Mp3ParseError('No MPEG-1 Layer III audio frames were found.');
   }
@@ -72,78 +86,89 @@ function readId3v2TagEnd(file: Buffer, offset: number, limit: number): number {
   return tagEnd;
 }
 
-function skipTrailingTags(file: Buffer, audioStart: number): number {
+interface TrailingTags {
+  start: number;
+  error?: Mp3ParseError;
+}
+
+function findTrailingTags(file: Buffer, audioStart: number): TrailingTags {
   let end = file.length;
 
   // Peel recognized tags off the end repeatedly, allowing tag combinations.
-  while (end > audioStart) {
-    if (
-      end - audioStart >= 128 &&
-      file.toString('latin1', end - 128, end - 125) === 'TAG'
-    ) {
-      end -= 128;
-      // The 227-byte TAG+ extension belongs immediately before ID3v1.
+  // Defer malformed-tag errors until frame boundaries confirm they are metadata.
+  try {
+    while (end > audioStart) {
       if (
-        end - audioStart >= 227 &&
-        file.toString('latin1', end - 227, end - 223) === 'TAG+'
+        end - audioStart >= 128 &&
+        file.toString('latin1', end - 128, end - 125) === 'TAG'
       ) {
-        end -= 227;
+        end -= 128;
+        // The 227-byte TAG+ extension belongs immediately before ID3v1.
+        if (
+          end - audioStart >= 227 &&
+          file.toString('latin1', end - 227, end - 223) === 'TAG+'
+        ) {
+          end -= 227;
+        }
+        continue;
       }
-      continue;
-    }
 
-    if (
-      end - audioStart >= 9 &&
-      file.toString('latin1', end - 9, end) === 'LYRICS200'
-    ) {
-      end = readLyrics3v2TagStart(file, end, audioStart);
-      continue;
-    }
-
-    if (
-      end - audioStart >= 9 &&
-      file.toString('latin1', end - 9, end) === 'LYRICSEND'
-    ) {
-      end = readLyrics3v1TagStart(file, end, audioStart);
-      continue;
-    }
-
-    if (
-      end - audioStart >= 10 &&
-      file.toString('latin1', end - 10, end - 7) === '3DI'
-    ) {
-      const footer = end - 10;
-      const tagSize = readSynchsafeSize(file, footer + 6);
-      // ID3v2.4 sizes exclude both the 10-byte header and 10-byte footer.
-      const start = end - tagSize - 20;
       if (
-        start < audioStart ||
-        file.readUInt8(footer + 3) !== 4 ||
-        (file.readUInt8(footer + 5) & 0x10) === 0
+        end - audioStart >= 9 &&
+        file.toString('latin1', end - 9, end) === 'LYRICS200'
       ) {
-        throw new Mp3ParseError('Invalid appended ID3v2.4 tag.');
+        end = readLyrics3v2TagStart(file, end, audioStart);
+        continue;
       }
-      if (readId3v2TagEnd(file, start, end) !== end) {
-        throw new Mp3ParseError(
-          'Appended ID3v2.4 header and footer do not match.',
-        );
+
+      if (
+        end - audioStart >= 9 &&
+        file.toString('latin1', end - 9, end) === 'LYRICSEND'
+      ) {
+        end = readLyrics3v1TagStart(file, end, audioStart);
+        continue;
       }
-      end = start;
-      continue;
-    }
 
-    if (
-      end - audioStart >= 32 &&
-      file.toString('latin1', end - 32, end - 24) === 'APETAGEX'
-    ) {
-      end = readApeTagStart(file, end, audioStart);
-      continue;
-    }
+      if (
+        end - audioStart >= 10 &&
+        file.toString('latin1', end - 10, end - 7) === '3DI'
+      ) {
+        const footer = end - 10;
+        const tagSize = readSynchsafeSize(file, footer + 6);
+        // ID3v2.4 sizes exclude both the 10-byte header and 10-byte footer.
+        const start = end - tagSize - 20;
+        if (
+          start < audioStart ||
+          file.readUInt8(footer + 3) !== 4 ||
+          (file.readUInt8(footer + 5) & 0x10) === 0
+        ) {
+          throw new Mp3ParseError('Invalid appended ID3v2.4 tag.');
+        }
+        if (readId3v2TagEnd(file, start, end) !== end) {
+          throw new Mp3ParseError(
+            'Appended ID3v2.4 header and footer do not match.',
+          );
+        }
+        end = start;
+        continue;
+      }
 
-    break;
+      if (
+        end - audioStart >= 32 &&
+        file.toString('latin1', end - 32, end - 24) === 'APETAGEX'
+      ) {
+        end = readApeTagStart(file, end, audioStart);
+        continue;
+      }
+
+      break;
+    }
+  } catch (error) {
+    if (!(error instanceof Mp3ParseError)) throw error;
+    return { start: end, error };
   }
 
-  return end;
+  return { start: end };
 }
 
 function readLyrics3v2TagStart(

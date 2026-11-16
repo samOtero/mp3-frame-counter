@@ -11,6 +11,41 @@ import {
   makeLyrics3Tag,
 } from './fixtures.js';
 
+test('footer signatures and complete tag structures inside audio remain part of their frame', () => {
+  const apparentTags = [
+    makeId3v1Tag(),
+    Buffer.concat([makeId3v1ExtendedTag(), makeId3v1Tag()]),
+    makeLyrics3Tag('lyrics', 1),
+    makeLyrics3Tag('lyrics', 2),
+    makeApeTag(Buffer.from('title'), true),
+    makeId3Tag(Buffer.alloc(8), 4, true),
+  ];
+  for (const [marker, length] of [
+    ['APETAGEX', 32],
+    ['3DI', 10],
+    ['LYRICSEND', 9],
+    ['LYRICS200', 9],
+  ] as const) {
+    const malformed = Buffer.alloc(length);
+    malformed.write(marker);
+    apparentTags.push(malformed);
+  }
+  for (const tag of apparentTags) {
+    const frame = makeFrame();
+    tag.copy(frame, frame.length - tag.length);
+    for (const realTrailer of [
+      Buffer.alloc(0),
+      makeId3v1Tag(),
+      makeApeTag(Buffer.from('real title'), true),
+    ]) {
+      assert.equal(
+        countMp3Frames(Buffer.concat([makeFrame(), frame, realTrailer])),
+        2,
+      );
+    }
+  }
+});
+
 test('skips the TAG+ extension together with its following ID3v1 tag', () => {
   const tags = [makeId3v1ExtendedTag(), makeId3v1Tag()];
   assert.equal(
